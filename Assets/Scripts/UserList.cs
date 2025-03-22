@@ -26,31 +26,30 @@ namespace NetworkChat
         }
 
         [Server]
-        public void SvAddCurrentUser(int userId, string userNickname, Color nicknameColor)
+        public void SvAddCurrentUser(UserData data)
         {
-            UserData data = new UserData(userId, userNickname, nicknameColor);
-            AllUserData.Add(data);
+            UserData d = new UserData(data.Id, data.Nickname, data.NicknameColor);
+            AllUserData.Add(d);
 
             RpcClearUserDataList();
+
             for (int i = 0; i < AllUserData.Count; i++)
-            {
-                RpcAddCurrentUser(AllUserData[i].Id, AllUserData[i].Nickname, AllUserData[i].NicknameColor);
-            }
+                RpcAddCurrentUser(AllUserData[i]);
         }
 
         [Server]
-        public void SvRemoveCurrentUser(int userId)
+        public void SvRemoveCurrentUser(UserData data)
         {
             for (int i = 0; i < AllUserData.Count; i++)
             {
-                if (AllUserData[i].Id == userId)
+                if (AllUserData[i].Id == data.Id)
                 {
                     AllUserData.RemoveAt(i);
                     break;
                 }
             }
 
-            RpcRemoveCurrentUser(userId);
+            RpcRemoveCurrentUser(data);
         }
 
         [ClientRpc]
@@ -60,20 +59,20 @@ namespace NetworkChat
         }
 
         [ClientRpc]
-        private void RpcAddCurrentUser(int userId, string userNickname, Color nicknameColor)
+        private void RpcAddCurrentUser(UserData data)
         {
-            UserData data = new UserData(userId, userNickname, nicknameColor);
-            AllUserData.Add(data);
+            UserData d = new UserData(data.Id, data.Nickname, data.NicknameColor);
+            AllUserData.Add(d);
 
             UpdateUserList?.Invoke(AllUserData);
         }
 
         [ClientRpc]
-        private void RpcRemoveCurrentUser(int userId)
+        private void RpcRemoveCurrentUser(UserData data)
         {
             for (int i = 0; i < AllUserData.Count; i++)
             {
-                if (AllUserData[i].Id == userId)
+                if (AllUserData[i].Id == data.Id)
                 {
                     AllUserData.RemoveAt(i);
                     break;
@@ -84,22 +83,19 @@ namespace NetworkChat
         }
 
         // Public Methods
-        public User GetUserByNickname(string nickname)
+        public User GetUserByNickname(UserData data)
         {
-            // Убедимся, что список пользователей не пуст
             if (AllUserData == null || AllUserData.Count == 0)
             {
                 Debug.LogError("UserList is empty or not initialized.");
                 return null;
             }
 
-            // Ищем пользователя по нику (без учета регистра)
             foreach (var userData in AllUserData)
             {
                 Debug.Log($"Checking user: {userData.Nickname} (ID: {userData.Id})");
-                if (userData.Nickname.Equals(nickname, StringComparison.OrdinalIgnoreCase))
+                if (userData.Nickname.Equals(data.Nickname, StringComparison.OrdinalIgnoreCase))
                 {
-                    // Проверяем, существует ли объект пользователя в NetworkServer.spawned
                     if (NetworkServer.spawned.TryGetValue((uint)userData.Id, out NetworkIdentity identity))
                     {
                         User user = identity.GetComponent<User>();
@@ -109,18 +105,14 @@ namespace NetworkChat
                             return user;
                         }
                         else
-                        {
                             Debug.LogError($"User component not found for ID: {userData.Id}");
-                        }
                     }
                     else
-                    {
                         Debug.LogError($"NetworkIdentity not found for ID: {userData.Id}");
-                    }
                 }
             }
 
-            Debug.LogError($"User with nickname {nickname} not found.");
+            Debug.LogError($"User with nickname {data.Nickname} not found.");
             return null;
         }
 
@@ -133,9 +125,7 @@ namespace NetworkChat
                     User user = NetworkServer.spawned[(uint)userData.Id].GetComponent<User>();
 
                     if (user != null && user.Data.Id == userId)
-                    {
                         return user;
-                    }
                 }
             }
             return null;

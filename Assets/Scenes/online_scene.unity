@@ -2148,7 +2148,6 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  AllUserData: []
 --- !u!4 &1127999969
 Transform:
   m_ObjectHideFlags: 0

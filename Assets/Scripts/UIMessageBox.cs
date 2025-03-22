@@ -3,7 +3,6 @@ using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using static NetworkChat.User;
 
 namespace NetworkChat
 {
@@ -17,51 +16,40 @@ namespace NetworkChat
         [SerializeField] private TextMeshProUGUI m_Text;
 
         private RectTransform m_RectTransform;
-        private RectTransform m_TextRectTransform;
 
         private void Awake()
         {
             m_RectTransform = GetComponent<RectTransform>();
-            m_TextRectTransform = GetComponent<RectTransform>();
         }
 
-        public void SetText(ChatMessageData messageData, bool isPrivate = false, bool isSender = false)
+        public void SetText(UserData data, string message, bool isPrivate = false, bool isSender = false)
         {
-            string hexSenderColor = ColorUtility.ToHtmlStringRGB(messageData.SenderColor);
-            string hexReceiverColor = ColorUtility.ToHtmlStringRGB(messageData.ReceiverColor);
+            string hexSenderColor = ColorUtility.ToHtmlStringRGB(data.NicknameColor);
             string privateMessageColor = ColorUtility.ToHtmlStringRGB(Color.yellow);
             string privateNicknameColor = ColorUtility.ToHtmlStringRGB(Color.magenta);
+            string receiverNicknameColor = ColorUtility.ToHtmlStringRGB(Color.white);
 
             string formattedMessage;
 
             if (isPrivate)
             {
-                string[] parts = messageData.Message.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                string[] parts = message.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 
                 if (parts.Length >= 3 && parts[0] == "/w")
                 {
                     string receiverNickname = parts[1];
-                    string message = string.Join(" ", parts.Skip(2));
+                    string messageText = string.Join(" ", parts.Skip(2));
 
                     if (isSender)
-                    {
-                        formattedMessage = $"<color=#{hexSenderColor}>{messageData.SenderNickname}</color>\n<color=#{privateNicknameColor}>[to <color=#{hexReceiverColor}>{receiverNickname}</color>]</color>: <color=#{privateMessageColor}>{message}</color>";
-                    }
+                        formattedMessage = $"<color=#{hexSenderColor}>{data.Nickname}</color>\n<color=#{privateNicknameColor}>[to <color=#{receiverNicknameColor}>{receiverNickname}</color>]</color>: <color=#{privateMessageColor}>{messageText}</color>";
                     else
-                    {
-                        formattedMessage = $"<color=#{privateNicknameColor}>[from <color=#{hexSenderColor}>{messageData.SenderNickname}</color>]</color>\n<color=#{privateMessageColor}>{message}</color>";
-                    }
+                        formattedMessage = $"<color=#{privateNicknameColor}>[from <color=#{hexSenderColor}>{data.Nickname}</color>]</color>\n<color=#{privateMessageColor}>{messageText}</color>";
                 }
                 else
-                {
-                    Debug.LogError("Ќеверный формат приватного сообщени€.");
-                    formattedMessage = messageData.Message;
-                }
+                    formattedMessage = message;
             }
             else
-            {
-                formattedMessage = $"<color=#{hexSenderColor}>{messageData.SenderNickname}</color>\n{messageData.Message}";
-            }
+                formattedMessage = $"<color=#{hexSenderColor}>{data.Nickname}</color>\n{message}";
 
             m_Text.text = formattedMessage;
 
@@ -79,7 +67,7 @@ namespace NetworkChat
 
                 if (m_BgImageTransform.anchorMax.x > 0.59f) m_BgImageTransform.anchorMax = new Vector2(0.59f, 1);
 
-                m_Text.alignment = TextAlignmentOptions.Left;
+                m_Text.alignment = TextAlignmentOptions.MidlineLeft;
             }
             else
                 m_Text.alignment = TextAlignmentOptions.MidlineLeft;
@@ -94,11 +82,12 @@ namespace NetworkChat
                 float textWidth = m_Text.preferredWidth;
 
                 m_BgImageTransform.anchorMin = new Vector2(1 - (textWidth / m_RectTransform.rect.width + 0.025f), 0);
+
                 if (m_BgImageTransform.anchorMin.x < 0.41f) m_BgImageTransform.anchorMin = new Vector2(0.41f, 0);
 
                 m_BgImageTransform.anchorMax = new Vector2(0.99f, 1);
 
-                m_Text.alignment = TextAlignmentOptions.Right;
+                m_Text.alignment = TextAlignmentOptions.MidlineLeft;
             }
             else
                 m_Text.alignment = TextAlignmentOptions.MidlineLeft;

@@ -2,7 +2,6 @@ using Mirror;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using static NetworkChat.User;
 
 namespace NetworkChat
 {
@@ -57,114 +56,86 @@ namespace NetworkChat
             UserList.UpdateUserList -= OnUpdateUserList;
         }
 
-
         // Handlers
-        private void OnRecievePrivateMessageToChat(NetworkConnection target, ChatMessageData messageData)
+        private void OnRecievePrivateMessageToChat(NetworkConnection target, UserData data, string message)
         {
-            AppendMessage(messageData,target);
+            AppendMessage(data, message, target);
         }
 
-        private void OnRecieveMessageToChat(ChatMessageData messageData)
+        private void OnRecieveMessageToChat(UserData data, string message)
         {
-            AppendMessage(messageData);
+            AppendMessage(data, message);
         }
 
         private void OnUpdateUserList(List<UserData> userList)
         {
-            for (int i = 0; i < m_UserListPanel.childCount; i++)
-                Destroy(m_UserListPanel.GetChild(i).gameObject);
+            foreach (Transform child in m_UserListPanel)
+                Destroy(child.gameObject);
 
-            for (int i = 0; i < userList.Count; i++)
+            foreach (var userData in userList)
             {
-                ChatMessageData userData = new ChatMessageData(
-                    userList[i].Id,             // ID пользователя
-                    userList[i].Nickname,       // Ник пользователя
-                    0,                          // ID получателя (не используется)
-                    "",                         // Ник получателя (не используется)
-                    "",                         // Сообщение (не используется)
-                    userList[i].NicknameColor,  // Цвет ника пользователя
-                    Color.black                 // Цвет ника получателя (не используется)
-                );
-
-                UIMessageBox userBox = Instantiate(m_UserBox.GetComponent<UIMessageBox>());
-
-                userBox.SetText(userData, isPrivate: false, isSender: false);
-                userBox.transform.SetParent(m_UserListPanel);
+                UIMessageBox userBox = Instantiate(m_UserBox, m_UserListPanel).GetComponent<UIMessageBox>();
+                userBox.SetText(userData, "", isPrivate: false, isSender: false);
                 userBox.transform.localScale = Vector3.one;
 
-                if (userList[i].Id == User.Local.Data.Id) userBox.SetStyleBySelf(false);
-                else userBox.SetStyleBySender(false);
+                if (userData.Id == User.Local.Data.Id)
+                    userBox.SetStyleBySelf(false);
+                else
+                    userBox.SetStyleBySender(false);
             }
         }
 
         // Private Methods
-        private void AppendMessage(ChatMessageData messageData, NetworkConnection targetConnection = null)
+        private void AppendMessage(UserData data, string message, NetworkConnection targetConnection = null)
         {
-            // Проверяем, является ли сообщение приватным
-            bool isPrivate = messageData.Message.StartsWith("/w ");
+            bool isPrivate = message.StartsWith("/w ");
 
-            // Если сообщение приватное
             if (isPrivate)
             {
-                // Разбиваем сообщение на части: "/w", "никнейм", "сообщение"
-                string[] parts = messageData.Message.Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
+                string[] parts = message.Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length >= 3)
                 {
-                    string receiverNickname = parts[1]; // Никнейм получателя
+                    string receiverNickname = parts[1];
 
-                    // Проверяем, является ли текущий пользователь получателем
                     bool isReceiver = User.Local.Data.Nickname.Equals(receiverNickname, StringComparison.OrdinalIgnoreCase);
 
-                    // Если текущий пользователь не является получателем и не является отправителем, не создаём messageBox
-                    if (!isReceiver && messageData.SenderId != User.Local.Data.Id)
-                    {
+                    if (!isReceiver && data.Id != User.Local.Data.Id)
                         return;
-                    }
                 }
                 else
                 {
-                    Debug.LogError("Неверный формат приватного сообщения.");
+                    Debug.LogError("Invalid private message format.");
                     return;
                 }
             }
 
-            // Если targetConnection указан, проверяем, должен ли текущий клиент отображать сообщение
             if (targetConnection != null)
             {
-                // Если текущий клиент не является целевым (target) и не является отправителем, не создаём messageBox
-                if (targetConnection != NetworkClient.connection && messageData.SenderId != User.Local.Data.Id)
-                {
+                if (targetConnection != NetworkClient.connection && data.Id != User.Local.Data.Id)
                     return;
-                }
             }
 
-            // Проверяем, что префаб UIMessageBox существует
             if (m_MessageBox == null)
             {
-                Debug.LogError("Префаб UIMessageBox не найден!");
+                Debug.LogError("UIMessageBox prefab not found!");
                 return;
             }
 
-            // Создаем экземпляр UIMessageBox
             UIMessageBox messageBox = Instantiate(m_MessageBox);
 
             if (messageBox == null)
             {
-                Debug.LogWarning("Компонент UIMessageBox не найден на префабе!");
+                Debug.LogWarning("UIMessageBox component not found on the prefab!");
                 return;
             }
 
-            // Настраиваем UIMessageBox
             messageBox.transform.localScale = Vector3.one;
             messageBox.transform.SetParent(m_MessagePanel);
 
-            // Проверяем, является ли текущий пользователь отправителем
-            bool isSender = messageData.SenderId == User.Local.Data.Id;
+            bool isSender = data.Id == User.Local.Data.Id;
 
-            // Устанавливаем текст и стиль сообщения
-            messageBox.SetText(messageData, isPrivate, isSender);
+            messageBox.SetText(data, message, isPrivate, isSender);
 
-            // Применяем стиль в зависимости от того, является ли пользователь отправителем
             if (isSender)
                 messageBox.SetStyleBySelf(true);
             else

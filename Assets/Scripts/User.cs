@@ -5,21 +5,6 @@ using System;
 
 namespace NetworkChat
 {
-    [System.Serializable]
-    public class UserData
-    {
-        public int Id;
-        public string Nickname;
-        public Color NicknameColor;
-
-        public UserData(int id, string nickname, Color nicknameColor)
-        {
-            Id = id;
-            Nickname = nickname;
-            NicknameColor = nicknameColor;
-        }
-    }
-
     public class User : NetworkBehaviour
     {
         public static User Local
@@ -29,9 +14,8 @@ namespace NetworkChat
                 var x = NetworkClient.localPlayer;
 
                 if (x != null)
-                {
                     return x.GetComponent<User>();
-                }
+
                 return null;
             }
         }
@@ -40,47 +24,8 @@ namespace NetworkChat
         private UIUserInput m_InputField;
 
         public static event Action<string> OnUserReady;
-        [System.Serializable]
-        public class ChatMessageData
-        {
-            public int SenderId;
-            public string SenderNickname;
-            public int ReceiverId;
-            public string ReceiverNickname;
-            public string Message;
-            public Color SenderColor;
-            public Color ReceiverColor;
-
-            // Конструктор по умолчанию (обязателен для Mirror)
-            public ChatMessageData()
-            {
-                SenderId = 0;
-                SenderNickname = string.Empty;
-                ReceiverId = 0;
-                ReceiverNickname = string.Empty;
-                Message = string.Empty;
-                SenderColor = Color.white;
-                ReceiverColor = Color.white;
-            }
-
-            // Параметризованный конструктор для удобства
-            public ChatMessageData(int senderId, string senderNickname,
-                                   int receiverId, string receiverNickname,
-                                   string message, Color senderColor, Color receiverColor)
-            {
-                SenderId = senderId;
-                SenderNickname = senderNickname;
-                ReceiverId = receiverId;
-                ReceiverNickname = receiverNickname;
-                Message = message;
-                SenderColor = senderColor;
-                ReceiverColor = receiverColor;
-            }
-        }
-
-        // Используем UnityAction с одним параметром
-        public static event UnityAction<ChatMessageData> RecieveMessageToChat;
-        public static event UnityAction<NetworkConnection, ChatMessageData> RecievePrivateMessageToChat;
+        public static event UnityAction<UserData, string> RecieveMessageToChat;
+        public static event UnityAction<NetworkConnection, UserData, string> RecievePrivateMessageToChat;
 
         public UserData Data => userData;
 
@@ -110,11 +55,8 @@ namespace NetworkChat
             {
                 string message = UIUserInput.Instance.GetString();
 
-                // Проверяем, не пустое ли сообщение
                 if (!string.IsNullOrEmpty(message))
-                {
                     SendMessageToChat(message);
-                }
             }
         }
 
@@ -124,7 +66,7 @@ namespace NetworkChat
         {
             base.OnStopServer();
 
-            UserList.Instance.SvRemoveCurrentUser(Data.Id);
+            UserList.Instance.SvRemoveCurrentUser(Data);
         }
 
         // Join
@@ -132,19 +74,19 @@ namespace NetworkChat
         {
             Data.Nickname = nickname;
 
-            CmdAddUser(Data.Id, Data.Nickname, Data.NicknameColor);
+            CmdAddUser(Data);
         }
 
         [Command]
-        private void CmdAddUser(int id, string nickname, Color nicknameColor)
+        private void CmdAddUser(UserData data)
         {
-            UserList.Instance.SvAddCurrentUser(id, nickname, nicknameColor);
+            UserList.Instance.SvAddCurrentUser(data);
         }
 
         [Command]
-        private void CmdRemoveUser(int id)
+        private void CmdRemoveUser(UserData data)
         {
-            UserList.Instance.SvRemoveCurrentUser(id);
+            UserList.Instance.SvRemoveCurrentUser(data);
         }
 
         // Chat
@@ -153,108 +95,82 @@ namespace NetworkChat
             if (!isLocalPlayer) return;
             if (string.IsNullOrEmpty(message)) return;
 
-            // Создаем объект ChatMessageData для общего сообщения
-            ChatMessageData messageData = new ChatMessageData(
-                userData.Id, // ID отправителя
-                userData.Nickname, // Ник отправителя
-                0, // ID получателя (0 для общего чата)
-                "", // Ник получателя (пусто для общего чата)
-                message, // Сообщение
-                userData.NicknameColor, // Цвет ника отправителя
-                Color.white // Цвет ника получателя (не используется для общего чата)
-            );
+            UserData d = new UserData(userData.Id, userData.Nickname, userData.NicknameColor);
 
-            // Отправляем сообщение
-            CmdSendMessageToChat(messageData);
+            CmdSendMessageToChat(d, message);
             m_InputField.ClearString();
         }
 
         [Command]
-        private void CmdSendMessageToChat(ChatMessageData messageData)
+        private void CmdSendMessageToChat(UserData data, string message)
         {
-            SvPostMessage(messageData);
+            SvPostMessage(data, message);
         }
 
         [Server]
-        private void SvPostMessage(ChatMessageData messageData)
+        private void SvPostMessage(UserData data, string message)
         {
-            RpcRecieveMessage(messageData);
+            RpcRecieveMessage(data, message);
         }
 
         [ClientRpc]
-        private void RpcRecieveMessage(ChatMessageData messageData)
+        private void RpcRecieveMessage(UserData data, string message)
         {
-            RecieveMessageToChat?.Invoke(messageData);
+            RecieveMessageToChat?.Invoke(data, message);
         }
 
         // Private Chat
-        public void SendPrivateMessageToUserByNickname(ChatMessageData messageData)
+        public void SendPrivateMessageToUserByNickname(UserData data, string message)
         {
             if (!isLocalPlayer) return;
-            if (string.IsNullOrEmpty(messageData.Message)) return;
+            if (string.IsNullOrEmpty(message)) return;
 
-            Debug.Log($"Поиск пользователя с ником: {messageData.ReceiverNickname}");
+            Debug.Log($"Поиск пользователя с ником: {data.Nickname}");
 
-            // Ищем получателя по никнейму
-            User receiver = UserList.Instance.GetUserByNickname(messageData.ReceiverNickname);
+            User receiver = UserList.Instance.GetUserByNickname(data);
             if (receiver == null)
             {
-                Debug.LogError($"Пользователь с ником {messageData.ReceiverNickname} не найден.");
+                Debug.LogError($"Пользователь с ником {data} не найден.");
                 return;
             }
 
             Debug.Log($"Пользователь найден: {receiver.Data.Nickname} (ID: {receiver.Data.Id})");
 
-            // Убедимся, что получатель существует
             if (receiver.Data == null)
             {
-                Debug.LogError($"Данные пользователя с ником {messageData.ReceiverNickname} не найдены.");
+                Debug.LogError($"Данные пользователя с ником {data} не найдены.");
                 return;
             }
 
-            messageData.ReceiverColor = receiver.Data.NicknameColor;
-
-            // Отправляем сообщение только отправителю и получателю
-            CmdSendPrivateMessageToUserByNickname(messageData, receiver.netId);
+            CmdSendPrivateMessageToUserByNickname(data, message);
         }
 
         [Command]
-        private void CmdSendPrivateMessageToUserByNickname(ChatMessageData messageData, uint receiverNetId)
+        private void CmdSendPrivateMessageToUserByNickname(UserData data, string message)
         {
-            SvPostPrivateMessage(messageData);
+            SvPostPrivateMessage(data, message);
         }
 
         [Server]
-        private void SvPostPrivateMessage(ChatMessageData messageData)
+        private void SvPostPrivateMessage(UserData data, string message)
         {
-            // Ищем получателя по ID
-            User receiver = UserList.Instance.GetUserById(messageData.ReceiverId);
+            User receiver = UserList.Instance.GetUserById(data.Id);
             if (receiver != null)
-            {
-                // Отправляем сообщение только получателю
-                receiver.TargetReceivePrivateMessage(receiver.connectionToClient, messageData);
-            }
+                receiver.TargetReceivePrivateMessage(receiver.connectionToClient, data, message);
             else
-            {
-                Debug.LogError($"User with ID {messageData.ReceiverId} not found.");
-            }
+                Debug.LogError($"User with ID {data} not found.");
 
-           // Отправляем сообщение отправителю
-           User sender = UserList.Instance.GetUserById(messageData.SenderId);
+           User sender = UserList.Instance.GetUserById(data.Id);
             if (sender != null)
-            {
-                sender.TargetReceivePrivateMessage(sender.connectionToClient, messageData);
-            }
+                sender.TargetReceivePrivateMessage(sender.connectionToClient, data, message);
             else
-            {
-                Debug.LogError($"User with ID {messageData.SenderId} not found.");
-            }
+                Debug.LogError($"User with ID {data} not found.");
         }
 
         [TargetRpc]
-        private void TargetReceivePrivateMessage(NetworkConnection target, ChatMessageData messageData)
+        private void TargetReceivePrivateMessage(NetworkConnection target, UserData data, string message)
         {
-            RecievePrivateMessageToChat?.Invoke(target, messageData);
+            RecievePrivateMessageToChat?.Invoke(target, data, message);
         }
     }
 }

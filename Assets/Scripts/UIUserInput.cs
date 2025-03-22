@@ -1,6 +1,5 @@
 using TMPro;
 using UnityEngine;
-using static NetworkChat.User;
 
 namespace NetworkChat
 {
@@ -44,16 +43,12 @@ namespace NetworkChat
 
         public void SendMessageToChat()
         {
-            // Получаем текст из поля ввода
             string inputText = m_MessageInputField.text;
 
-            // Проверяем, не пустое ли сообщение
             if (string.IsNullOrEmpty(inputText)) return;
 
-            // Отправляем сообщение
             User.Local.SendMessageToChat(inputText);
 
-            // Очищаем поле ввода
             ClearString();
         }
 
